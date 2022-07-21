@@ -36,7 +36,7 @@ EventBridge.
 
 ## Event retry policy and using dead-letter queues
 
-The Codebuild, CodePipeline, Lambda, StepFunctions, LogGroup and SQSQueue targets support attaching a [dead letter queue and setting retry policies](https://docs.aws.amazon.com/eventbridge/latest/userguide/rule-dlq.html). See the [lambda example](#invoke-a-lambda-function).
+The Codebuild, CodePipeline, Lambda, StepFunctions, LogGroup, SQSQueue and SNSTopic targets support attaching a [dead letter queue and setting retry policies](https://docs.aws.amazon.com/eventbridge/latest/userguide/rule-dlq.html). See the [lambda example](#invoke-a-lambda-function).
 Use [escape hatches](https://docs.aws.amazon.com/cdk/latest/guide/cfn_layer.html) for the other target types.
 
 ## Invoke a Lambda function
@@ -51,7 +51,7 @@ triggered for every events from `aws.ec2` source. You can optionally attach a
 import * as lambda from '@aws-cdk/aws-lambda';
 
 const fn = new lambda.Function(this, 'MyFunc', {
-  runtime: lambda.Runtime.NODEJS_12_X,
+  runtime: lambda.Runtime.NODEJS_14_X,
   handler: 'index.handler',
   code: lambda.Code.fromInline(`exports.handler = handler.toString()`),
 });
@@ -92,6 +92,39 @@ const rule = new events.Rule(this, 'rule', {
 });
 
 rule.addTarget(new targets.CloudWatchLogGroup(logGroup));
+```
+
+A rule target input can also be specified to modify the event that is sent to the log group.
+Unlike other event targets, CloudWatchLogs requires a specific input template format.
+
+```ts
+import * as logs from '@aws-cdk/aws-logs';
+declare const logGroup: logs.LogGroup;
+declare const rule: events.Rule;
+
+rule.addTarget(new targets.CloudWatchLogGroup(logGroup, {
+  logEvent: targets.LogGroupTargetInput({
+    timestamp: events.EventField.from('$.time'),
+    message: events.EventField.from('$.detail-type'),
+  }),
+}));
+```
+
+If you want to use static values to overwrite the `message` make sure that you provide a `string`
+value.
+
+```ts
+import * as logs from '@aws-cdk/aws-logs';
+declare const logGroup: logs.LogGroup;
+declare const rule: events.Rule;
+
+rule.addTarget(new targets.CloudWatchLogGroup(logGroup, {
+  logEvent: targets.LogGroupTargetInput({
+    message: JSON.stringify({
+	  CustomField: 'CustomValue',
+	}),
+  }),
+}));
 ```
 
 ## Start a CodeBuild build
@@ -167,13 +200,13 @@ const role = new iam.Role(this, 'Role', {
   assumedBy: new iam.ServicePrincipal('events.amazonaws.com'),
 });
 const stateMachine = new sfn.StateMachine(this, 'SM', {
-  definition: new sfn.Wait(this, 'Hello', { time: sfn.WaitTime.duration(cdk.Duration.seconds(10)) }),
-  role,
+  definition: new sfn.Wait(this, 'Hello', { time: sfn.WaitTime.duration(cdk.Duration.seconds(10)) })
 });
 
 rule.addTarget(new targets.SfnStateMachine(stateMachine, {
   input: events.RuleTargetInput.fromObject({ SomeParam: 'SomeValue' }),
   deadLetterQueue: dlq,
+  role: role
 }));
 ```
 
@@ -243,7 +276,7 @@ const rule = new events.Rule(this, 'Rule', {
 
 const fn = new lambda.Function( this, 'MyFunc', {
   handler: 'index.handler',
-  runtime: lambda.Runtime.NODEJS_12_X,
+  runtime: lambda.Runtime.NODEJS_14_X,
   code: lambda.Code.fromInline( 'exports.handler = e => {}' ),
 } );
 
